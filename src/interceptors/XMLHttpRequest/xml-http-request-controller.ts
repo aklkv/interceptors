@@ -113,6 +113,18 @@ export class XMLHttpRequestController {
             return invoke()
           }
 
+          case 'removeEventListener': {
+            const [eventName, listener] = args as [
+              keyof XMLHttpRequestEventTargetEventMap,
+              Function,
+            ]
+
+            this.unregisterEvent(this.events, eventName, listener)
+            this.logger.verbose('removeEventListener', eventName, listener)
+
+            return invoke()
+          }
+
           case 'setRequestHeader': {
             const [name, value] = args as [string, string]
             this.requestHeaders.set(name, value)
@@ -227,25 +239,6 @@ export class XMLHttpRequestController {
       this.request,
       'upload',
       createProxy(this.request.upload, {
-        setProperty: ([propertyName, nextValue], invoke) => {
-          switch (propertyName) {
-            case 'onloadstart':
-            case 'onprogress':
-            case 'onabort':
-            case 'onerror':
-            case 'onload':
-            case 'ontimeout':
-            case 'onloadend': {
-              const eventName = propertyName.slice(
-                2
-              ) as keyof XMLHttpRequestEventTargetEventMap
-
-              this.registerUploadEvent(eventName, nextValue as Function)
-            }
-          }
-
-          return invoke()
-        },
         methodCall: ([methodName, args], invoke) => {
           switch (methodName) {
             case 'addEventListener': {
@@ -256,6 +249,26 @@ export class XMLHttpRequestController {
               this.registerUploadEvent(eventName, listener)
               this.logger.verbose('upload.addEventListener', eventName, listener)
 
+              return invoke()
+            }
+
+            case 'removeEventListener': {
+              const [eventName, listener] = args as [
+                keyof XMLHttpRequestEventTargetEventMap,
+                Function,
+              ]
+
+              this.unregisterEvent(this.uploadEvents, eventName, listener)
+              this.logger.verbose(
+                'upload.removeEventListener',
+                eventName,
+                listener
+              )
+
+              return invoke()
+            }
+
+            default: {
               return invoke()
             }
           }
@@ -273,6 +286,18 @@ export class XMLHttpRequestController {
     this.events.set(eventName, nextEvents)
 
     this.logger.verbose('registered event "%s"', eventName, listener)
+  }
+
+  private unregisterEvent(
+    events: Map<keyof XMLHttpRequestEventTargetEventMap, Array<Function>>,
+    eventName: keyof XMLHttpRequestEventTargetEventMap,
+    listener: Function
+  ): void {
+    const prevEvents = events.get(eventName) || []
+    const nextEvents = prevEvents.filter((event) => event !== listener)
+    events.set(eventName, nextEvents)
+
+    this.logger.verbose('unregistered event "%s"', eventName, listener)
   }
 
   private registerUploadEvent(
